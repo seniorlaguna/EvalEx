@@ -214,11 +214,13 @@ public class Expression {
     /**
      * LazyNumber interface created for lazily evaluated functions
      */
-    public interface LazyNumber {
+    public static class LazyNumber {
 
-        BigDecimal eval();
+        public boolean isPercentage() { return false; }
 
-        String getString();
+        public BigDecimal eval() { return null; }
+
+        public String getString() { return null; }
     }
 
     /**
@@ -327,6 +329,7 @@ public class Expression {
         public String surface = "";
         public TokenType type;
         public int pos;
+        public boolean isPercentage = false;
 
         public void append(char c) {
             surface += c;
@@ -414,9 +417,25 @@ public class Expression {
             while (Character.isWhitespace(ch) && pos < input.length()) {
                 ch = input.charAt(++pos);
             }
+
+            if (ch == '%') {
+                if (previousToken.type != TokenType.LITERAL && previousToken.type != TokenType.HEX_LITERAL) {
+                    throw new ExpressionException("Missing operand for percentage operation");
+                }
+                previousToken.isPercentage = true;
+
+                pos++;
+
+                if (pos >= input.length()) {
+                    previousToken = null;
+                    return null;
+                }
+            }
+
             token.pos = pos;
 
             boolean isHex = false;
+
 
             if (Character.isDigit(ch) || (ch == DECIMAL_SEPARATOR && Character.isDigit(peekNextChar()))) {
                 if (ch == '0' && (peekNextChar() == 'x' || peekNextChar() == 'X')) {
@@ -437,7 +456,9 @@ public class Expression {
                     ch = pos == input.length() ? 0 : input.charAt(pos);
                 }
                 token.type = isHex ? TokenType.HEX_LITERAL : TokenType.LITERAL;
-            } else if (ch == '"') {
+            }
+
+            else if (ch == '"') {
                 pos++;
                 if (previousToken.type != TokenType.STRINGPARAM) {
                     ch = input.charAt(pos);
@@ -587,13 +608,7 @@ public class Expression {
                 return v1.divide(v2, mc);
             }
         });
-        addOperator(new Operator("%", OPERATOR_PRECEDENCE_MULTIPLICATIVE, true) {
-            @Override
-            public BigDecimal eval(BigDecimal v1, BigDecimal v2) {
-                assertNotNull(v1, v2);
-                return v1.remainder(v2, mc);
-            }
-        });
+
         addOperator(new Operator("^", powerOperatorPrecedence, false) {
             @Override
             public BigDecimal eval(BigDecimal v1, BigDecimal v2) {
@@ -729,6 +744,14 @@ public class Expression {
             @Override
             public BigDecimal evalUnary(BigDecimal v1) {
                 return v1.multiply(BigDecimal.ONE);
+            }
+        });
+
+        addFunction(new Function("MOD", 2, false) {
+            @Override
+            public BigDecimal eval(List<BigDecimal> params) {
+                assertNotNull(params.get(0), params.get(1));
+                return params.get(0).remainder(params.get(1), mc);
             }
         });
 
@@ -1256,6 +1279,10 @@ public class Expression {
         Token previousToken = null;
         while (tokenizer.hasNext()) {
             Token token = tokenizer.next();
+            if (token == null) {
+                break;
+            }
+
             switch (token.type) {
                 case STRINGPARAM:
                     stack.push(token);
@@ -1408,7 +1435,12 @@ public class Expression {
 
         Deque<LazyNumber> stack = new ArrayDeque<LazyNumber>();
 
+        System.out.println();
+        System.out.println(originalExpression);
+
         for (final Token token : getRPN()) {
+            System.out.println(token.type);
+
             switch (token.type) {
                 case UNARY_OPERATOR: {
                     final LazyNumber value = stack.pop();
@@ -1426,10 +1458,30 @@ public class Expression {
                     break;
                 }
                 case OPERATOR:
-                    final LazyNumber v1 = stack.pop();
+                    final LazyNumber tmpV1 = stack.pop();
                     final LazyNumber v2 = stack.pop();
+
+                    LazyNumber tmp = tmpV1;
+
+                    if (tmpV1.isPercentage()) {
+                        if (token.surface.equals("+") || token.surface.equals("-")) {
+                            tmp = new LazyNumber() {
+                                @Override
+                                public BigDecimal eval() {
+                                    return tmpV1.eval().multiply(v2.eval());
+                                }
+                            };
+                        }
+                    }
+                    else {
+                        tmp = tmpV1;
+                    }
+
+                    final LazyNumber v1 = tmp;
+
                     LazyNumber result = new LazyNumber() {
                         public BigDecimal eval() {
+
                             return operators.get(token.surface).eval(v2, v1).eval();
                         }
 
@@ -1478,16 +1530,25 @@ public class Expression {
                     break;
                 case LITERAL:
                     stack.push(new LazyNumber() {
+                        @Override
+                        public boolean isPercentage() {
+                            return token.isPercentage;
+                        }
+
                         public BigDecimal eval() {
                             if (token.surface.equalsIgnoreCase("NULL")) {
                                 return null;
                             }
 
-                            return new BigDecimal(token.surface, mc);
+                            return token.isPercentage ?
+                                    new BigDecimal(token.surface, mc).divide(new BigDecimal(100)) :
+                                    new BigDecimal(token.surface, mc);
                         }
 
                         public String getString() {
-                            return String.valueOf(new BigDecimal(token.surface, mc));
+                            return token.isPercentage ?
+                                    String.valueOf(new BigDecimal(token.surface, mc).divide(new BigDecimal(100))) :
+                                    String.valueOf(new BigDecimal(token.surface, mc));
                         }
                     });
                     break;

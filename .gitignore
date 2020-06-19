@@ -6,3 +6,5 @@
 .idea
 target
 .gradle
+build/
+*.class

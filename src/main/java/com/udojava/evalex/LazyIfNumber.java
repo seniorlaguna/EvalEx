@@ -33,7 +33,7 @@ import java.util.List;
 /**
  * Lazy Number for IF function created for lazily evaluated IF condition
  */
-public class LazyIfNumber implements LazyNumber {
+public class LazyIfNumber extends LazyNumber {
 
   private List<LazyNumber> lazyParams;
 

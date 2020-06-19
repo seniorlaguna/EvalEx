@@ -107,8 +107,8 @@ public class TestEval {
 		assertEquals("5", new Expression("3+4/2").eval().toPlainString());
 		assertEquals("3.5", new Expression("(3+4)/2").eval().toPlainString());
 		assertEquals("7.98", new Expression("4.2*1.9").eval().toPlainString());
-		assertEquals("2", new Expression("8%3").eval().toPlainString());
-		assertEquals("0", new Expression("8%2").eval().toPlainString());
+		assertEquals("2", new Expression("mod(8,3)").eval().toPlainString());
+		assertEquals("0", new Expression("mod(8,2)").eval().toPlainString());
 		assertEquals("0.2", new Expression("2*.1").eval().toPlainString());
 	}
 	
