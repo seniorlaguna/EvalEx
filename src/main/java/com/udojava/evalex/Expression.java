@@ -419,17 +419,17 @@ public class Expression {
             }
 
             if (ch == '%') {
-                if (previousToken.type != TokenType.LITERAL && previousToken.type != TokenType.HEX_LITERAL) {
+                if (previousToken == null || (previousToken.type != TokenType.LITERAL && previousToken.type != TokenType.HEX_LITERAL)) {
                     throw new ExpressionException("Missing operand for percentage operation");
                 }
                 previousToken.isPercentage = true;
 
-                pos++;
-
-                if (pos >= input.length()) {
+                if (++pos >= input.length()) {
                     previousToken = null;
                     return null;
                 }
+
+                ch = input.charAt(pos);
             }
 
             token.pos = pos;
@@ -1435,11 +1435,7 @@ public class Expression {
 
         Deque<LazyNumber> stack = new ArrayDeque<LazyNumber>();
 
-        System.out.println();
-        System.out.println(originalExpression);
-
         for (final Token token : getRPN()) {
-            System.out.println(token.type);
 
             switch (token.type) {
                 case UNARY_OPERATOR: {
